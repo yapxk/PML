@@ -1,0 +1,98 @@
+---
+title: "Practice Machine Learning Writeup"
+author: "Yap Xinkai"
+output: html_document
+---
+##Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+##Load the data and required libraries
+```{r,results='hide', message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+pmltrain <- read.csv("./pml-training.csv")
+pmltest <- read.csv("./pml-testing.csv")
+```
+
+##Cleaning data
+-Removing columns with invalid integers and near 0 variance predictors.
+
+-Irrelevant columns for classification, missing values and descriptive fields are removed.
+
+-Convert class into factor.
+
+```{r,results='hide', message=FALSE, warning=FALSE}
+#removing columns with invalid integers
+nasPerColumn<- apply(pmltrain,2,function(x) {sum(is.na(x))});
+pmltrain <- pmltrain[,which(nasPerColumn <  nrow(pmltrain)*0.9)];  
+
+#removing 0 variance predictors
+nearZeroColumns <- nearZeroVar(pmltrain, saveMetrics = TRUE)
+pmltrain <- pmltrain[, nearZeroColumns$nzv==FALSE]
+
+#remove irrelevant columns for classification, NA and descriptive fields
+pmltrain<-pmltrain[,7:ncol(pmltrain)]
+
+#class into factor
+pmltrain$classe <- factor(pmltrain$classe)
+
+```
+
+##Data Splitting
+Split the data: 60% for training, 40% for testing
+```{r,results='hide', message=FALSE, warning=FALSE}
+set.seed(1235)
+trainIndex <- createDataPartition(y = pmltrain$classe, p=0.6,list=FALSE);
+TrainingPart <- pmltrain[trainIndex,];
+TestingPart <- pmltrain[-trainIndex,];
+```
+
+##Random forest Model
+Implementing random forest as our model for classification and regression.
+
+```{r}
+rfModel <- randomForest(classe ~ ., data = TrainingPart, importance = TRUE, ntrees = 10)
+```
+
+##Model Cross Validation
+
+To test the model performance on the training set itself and the cross validation set.
+
+####Training accuracy
+```{r}
+ptraining <- predict(rfModel, TrainingPart)
+print(confusionMatrix(ptraining, TrainingPart$classe))
+```
+####Validation accuracy 
+```{r}
+pvalidation <- predict(rfModel, TestingPart)
+print(confusionMatrix(pvalidation, TestingPart$classe))
+```
+The cross validation accuracy is 99.95% and the out-of-sample error is 0.5%.
+
+##Test set prediction
+Prediction of algorithm for the test set.
+```{r}
+ptest <- predict(rfModel, pmltest)
+ptest
+```
+
+
+##Predicting 20 test cases
+Random forest model tuned with cross validation used to predict 20 test cases.
+
+```{r}
+answers <- as.vector(ptest)
+
+pml_write_files = function(x) {
+    n = length(x)
+    for (i in 1:n) {
+        filename = paste0("problem_id_", i, ".txt")
+        write.table(x[i], file = filename, quote = FALSE, row.names = FALSE, 
+            col.names = FALSE)
+    }
+}
+
+pml_write_files(answers)
+```
